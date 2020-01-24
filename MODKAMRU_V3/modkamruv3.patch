@@ -1,7 +1,7 @@
 From abf7417d45d8ccba02479b0c3d9303f9bb9c9770 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Thu, 23 Jan 2020 14:28:49 +0200
-Subject: [PATCH 1/4] minimal working coordinator
+Subject: [PATCH 1/5] minimal working coordinator
 
 
 diff --git a/Components/hal/target/CC2538ZNP/hal_board_cfg.h b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
@@ -181,13 +181,9 @@ index 2b8d56d..c4f48c8 100644
 From 17ea23369c23feaa20f676f3b60d0de102f86e41 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Thu, 23 Jan 2020 15:23:13 +0200
-Subject: [PATCH 2/4] added led support
+Subject: [PATCH 2/5] added led support
 
 
-+Projects/zstack/ZNP/CC253x/dev/
-+Projects/zstack/ZNP/CC2538/CC2538ZNP-Debug/
-+Projects/zstack/ZNP/CC2538/settings/
-\ No newline at end of file
 diff --git a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
 index 38ac3d9..b983904 100644
 --- a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
@@ -381,7 +377,7 @@ index c4f48c8..3de9bd9 100644
 From 096280f929c9a2104fa298f7297437abe5322d68 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Thu, 23 Jan 2020 15:29:44 +0200
-Subject: [PATCH 3/4] blink on every znp event
+Subject: [PATCH 3/5] blink on every znp event
 
 
 diff --git a/Projects/zstack/ZNP/Source/znp_app.c b/Projects/zstack/ZNP/Source/znp_app.c
@@ -417,7 +413,7 @@ index 31b115e..16182f2 100644
 From 73beec4e66fbda50964edb2c25f9bc0948b7921f Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Fri, 24 Jan 2020 13:07:08 +0200
-Subject: [PATCH 4/4] Blinking on permit_join: true Turn off leds on serial:  
+Subject: [PATCH 4/5] Blinking on permit_join: true Turn off leds on serial:  
  disable_led: true
 
 
@@ -639,6 +635,65 @@ index 16182f2..668cfb3 100644
  #endif
    
    osal_event_hdr_t *pMsg;
+-- 
+2.24.1.windows.2
+
+
+From 8108f6c1f53d24b39cbbd0c2a2cd418bcd690b91 Mon Sep 17 00:00:00 2001
+From: Alex Gavr <reverieline@gmail.com>
+Date: Fri, 24 Jan 2020 17:35:24 +0200
+Subject: [PATCH 5/5] Data buffers increased
+
+
+diff --git a/Components/stack/bdb/bdb_FindingAndBinding.c b/Components/stack/bdb/bdb_FindingAndBinding.c
+index 1b4f72c..7695d9f 100644
+--- a/Components/stack/bdb/bdb_FindingAndBinding.c
++++ b/Components/stack/bdb/bdb_FindingAndBinding.c
+@@ -624,6 +624,9 @@ void bdb_ProcessSimpleDesc( zdoIncomingMsg_t *msgPtr )
+     else
+     {
+       //Save the simple desc to don't ask for it again
++#ifdef MODKAMRU_V3
++      bdb_zclSimpleDescClusterListClean( &bdb_FindingBindingTargetSimpleDesc );
++#endif
+       pCurr->SimpleDescriptor = &bdb_FindingBindingTargetSimpleDesc;
+     }
+     (void)extAddr;  //dummy
+diff --git a/Components/stack/nwk/nwk_globals.c b/Components/stack/nwk/nwk_globals.c
+index eb436ae..8b43ae5 100644
+--- a/Components/stack/nwk/nwk_globals.c
++++ b/Components/stack/nwk/nwk_globals.c
+@@ -71,10 +71,17 @@
+  * CONSTANTS
+  */
+ // Maximums for the data buffer queue
++#ifdef MODKAMRU_V3
++#define NWK_MAX_DATABUFS_WAITING    80     // Waiting to be sent to MAC
++#define NWK_MAX_DATABUFS_SCHEDULED  50     // Timed messages to be sent
++#define NWK_MAX_DATABUFS_CONFIRMED  50     // Held after MAC confirms
++#define NWK_MAX_DATABUFS_TOTAL      255    // Total number of buffers
++#else
+ #define NWK_MAX_DATABUFS_WAITING    8     // Waiting to be sent to MAC
+ #define NWK_MAX_DATABUFS_SCHEDULED  5     // Timed messages to be sent
+ #define NWK_MAX_DATABUFS_CONFIRMED  5     // Held after MAC confirms
+ #define NWK_MAX_DATABUFS_TOTAL      12    // Total number of buffers
++#endif
+ 
+ // 1-255 (0 -> 256) X RTG_TIMER_INTERVAL
+ // A known shortcoming is that when a message is enqueued as "hold" for a
+diff --git a/Projects/zstack/Tools/CC2538DB/CC2538.icf b/Projects/zstack/Tools/CC2538DB/CC2538.icf
+index 9d095fa..cb8abf6 100644
+--- a/Projects/zstack/Tools/CC2538DB/CC2538.icf
++++ b/Projects/zstack/Tools/CC2538DB/CC2538.icf
+@@ -87,7 +87,7 @@ define region FLASH_LCK = mem:[from 0x0027FFE0 to 0x0027FFFF];
+ //
+ // Define a region for the on-chip SRAM.
+ //
+-define region SRAM = mem:[from 0x20004000 to 0x20007FFF];
++define region SRAM = mem:[from 0x20000000 to 0x20007FFF];
+ 
+ //
+ // Define a block for the heap.  The size should be set to something other
 -- 
 2.24.1.windows.2
 

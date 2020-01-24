@@ -1,20 +1,8 @@
 From abf7417d45d8ccba02479b0c3d9303f9bb9c9770 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Thu, 23 Jan 2020 14:28:49 +0200
-Subject: [PATCH 1/3] minimal working coordinator
+Subject: [PATCH 1/4] minimal working coordinator
 
----
- .../hal/target/CC2538ZNP/hal_board_cfg.h      |  2 +-
- Components/mt/MT_SYS.c                        |  6 ++++--
- Components/mt/MT_VERSION.c                    |  2 +-
- Components/mt/revision_info.h                 |  1 +
- Components/osal/mcu/cc2538/osal_nv.c          |  2 +-
- Components/stack/af/AF.c                      | 20 ++++++++++++++++---
- Components/stack/sys/ZGlobals.c               |  5 ++++-
- Projects/zstack/Tools/CC2538DB/CC2538.icf     |  4 ++--
- Projects/zstack/ZNP/Source/znp.cfg            |  6 ++++++
- 10 files changed, 51 insertions(+), 12 deletions(-)
- create mode 100644 Components/mt/revision_info.h
 
 diff --git a/Components/hal/target/CC2538ZNP/hal_board_cfg.h b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
 index 0bc45b5..a6ae08a 100644
@@ -193,15 +181,13 @@ index 2b8d56d..c4f48c8 100644
 From 17ea23369c23feaa20f676f3b60d0de102f86e41 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Thu, 23 Jan 2020 15:23:13 +0200
-Subject: [PATCH 2/3] added led support
+Subject: [PATCH 2/4] added led support
 
----
- .../bsp/srf06eb_cc2538/drivers/source/bsp.h   | 26 ++++---
- .../hal/target/CC2538ZNP/hal_board_cfg.h      | 68 ++++++++++++++-----
- Projects/zstack/ZMain/TI2538ZNP/ZMain.c       | 11 +++
- Projects/zstack/ZNP/Source/znp.cfg            |  7 +-
- 5 files changed, 88 insertions(+), 29 deletions(-)
 
++Projects/zstack/ZNP/CC253x/dev/
++Projects/zstack/ZNP/CC2538/CC2538ZNP-Debug/
++Projects/zstack/ZNP/CC2538/settings/
+\ No newline at end of file
 diff --git a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
 index 38ac3d9..b983904 100644
 --- a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
@@ -395,11 +381,8 @@ index c4f48c8..3de9bd9 100644
 From 096280f929c9a2104fa298f7297437abe5322d68 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Thu, 23 Jan 2020 15:29:44 +0200
-Subject: [PATCH 3/3] blink on every znp event
+Subject: [PATCH 3/4] blink on every znp event
 
----
- Projects/zstack/ZNP/Source/znp_app.c | 8 ++++++++
- 1 file changed, 8 insertions(+)
 
 diff --git a/Projects/zstack/ZNP/Source/znp_app.c b/Projects/zstack/ZNP/Source/znp_app.c
 index 31b115e..16182f2 100644
@@ -427,6 +410,235 @@ index 31b115e..16182f2 100644
    osal_event_hdr_t *pMsg;
  #if !defined CC2531ZNP
    uint8 *pBuf;
+-- 
+2.24.1.windows.2
+
+
+From 73beec4e66fbda50964edb2c25f9bc0948b7921f Mon Sep 17 00:00:00 2001
+From: Alex Gavr <reverieline@gmail.com>
+Date: Fri, 24 Jan 2020 13:07:08 +0200
+Subject: [PATCH 4/4] Blinking on permit_join: true Turn off leds on serial:  
+ disable_led: true
+
+
+diff --git a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
+index b983904..367699d 100644
+--- a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
++++ b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
+@@ -81,14 +81,14 @@ extern "C"
+ #define BSP_3V3_EN              GPIO_PIN_4      //!< PB4
+ 
+ // Board LED defines
+-#ifdef MODKAMRU_V3
++#ifdef MODKAMRU_V3 // Redefine board LEDs
+   #define BSP_LED_BASE            GPIO_B_BASE
+-  #define BSP_LED_1               GPIO_PIN_1      //!< PC0
+-  #define BSP_LED_2               GPIO_PIN_2      //!< PC1
+-  #define BSP_LED_3               GPIO_PIN_3      //!< PC2
+-  #define BSP_LED_4               GPIO_PIN_4      //!< PC3
+-  #define BSP_LED_ALL             (BSP_LED_1 | BSP_LED_2 | BSP_LED_3 | BSP_LED_4)     //!< Bitmask of all LEDs
+-#else
++  #define BSP_LED_1               GPIO_PIN_1
++  #define BSP_LED_2               GPIO_PIN_2
++  #define BSP_LED_3               GPIO_PIN_3
++  #define BSP_LED_4               GPIO_PIN_4
++  #define BSP_LED_ALL             (BSP_LED_1 | BSP_LED_2 | BSP_LED_3 | BSP_LED_4)
++#else //Not a MODKAMRU board
+   #define BSP_LED_BASE            GPIO_C_BASE
+   #define BSP_LED_1               GPIO_PIN_0      //!< PC0
+   #define BSP_LED_2               GPIO_PIN_1      //!< PC1
+diff --git a/Components/hal/include/hal_led.h b/Components/hal/include/hal_led.h
+index bb327f1..f8a88b2 100644
+--- a/Components/hal/include/hal_led.h
++++ b/Components/hal/include/hal_led.h
+@@ -86,6 +86,19 @@ extern "C"
+ /*********************************************************************
+  * GLOBAL VARIABLES
+  */
++  
++#ifdef MODKAMRU_V3 //LED control helpers
++  /* Dynamically enable/disable LEDs */
++  extern bool gbModkamUseLeds;
++  extern void modkamUseLeds(bool);
++  
++  /* LED control macros */
++#define MODKAM_LED_ON(leds) {if(gbModkamUseLeds)HalLedSet(leds,HAL_LED_MODE_ON);}
++#define MODKAM_LED_OFF(leds) {if(gbModkamUseLeds)HalLedSet(leds,HAL_LED_MODE_OFF);}
++#define MODKAM_LED_BLINK(leds,count,duty,duration) {if(gbModkamUseLeds)HalLedBlink(leds,count,duty,duration);}
++#define MODKAM_LED_BLINK_LONG(leds) MODKAM_LED_BLINK(leds,1,90,1000)
++#define MODKAM_LED_BLINK_SHORT(leds) MODKAM_LED_BLINK(leds,1,50,100)
++#endif
+ 
+ /*
+  * Initialize LED Service.
+diff --git a/Components/hal/target/CC2538ZNP/hal_board_cfg.h b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
+index bde4def..365b365 100644
+--- a/Components/hal/target/CC2538ZNP/hal_board_cfg.h
++++ b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
+@@ -341,13 +341,13 @@ extern void MAC_RfFrontendSetup(void);
+ }
+ 
+ /* ----------- LED's ---------- */
+-#ifdef MODKAMRU_V3
++#ifdef MODKAMRU_V3 //Set LED pins to output mode
+   #define HAL_BOARD_LED_INIT() GPIOPinTypeGPIOOutput(BSP_LED_BASE,BSP_LED_ALL)
+ #else
+   #define HAL_BOARD_LED_INIT()
+ #endif
+ 
+-#ifdef MODKAMRU_V3
++#ifdef MODKAMRU_V3 //Redefine LED contorl macros
+   #define HAL_TURN_OFF_LED1()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, BSP_LED_1)
+   #define HAL_TURN_OFF_LED2()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, BSP_LED_2)
+   #define HAL_TURN_OFF_LED3()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, BSP_LED_3)
+@@ -357,7 +357,7 @@ extern void MAC_RfFrontendSetup(void);
+   #define HAL_TURN_ON_LED2()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, 0)
+   #define HAL_TURN_ON_LED3()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, 0)
+   #define HAL_TURN_ON_LED4()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, 0)
+-#else /* Not a Modkam.ru V3 board */
++#else /* Not a MODKAMRU board */
+   #define HAL_TURN_OFF_LED1()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, 0)
+   #define HAL_TURN_OFF_LED2()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, 0)
+   #define HAL_TURN_OFF_LED3()       //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, 0)
+@@ -377,12 +377,12 @@ extern void MAC_RfFrontendSetup(void);
+ #define HAL_SET_GPIO_02()         GPIOPinWrite(BSP_LED_BASE, GPIO_PIN_3, GPIO_PIN_3)  // LED4
+ 
+ /* ----------- Toggle the LEDs ---------- */
+-#ifdef MODKAMRU_V3
++#ifdef MODKAMRU_V3 //Redefine LED contorl macros
+   #define HAL_TOGGLE_LED1()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_1)))
+   #define HAL_TOGGLE_LED2()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_2)))
+   #define HAL_TOGGLE_LED3()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_3)))
+   #define HAL_TOGGLE_LED4()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_4)))
+-#else
++#else //Not a MODKAMRU board
+   #define HAL_TOGGLE_LED1()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_1)))
+   #define HAL_TOGGLE_LED2()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_2)))
+   #define HAL_TOGGLE_LED3()         //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_3)))
+@@ -390,12 +390,12 @@ extern void MAC_RfFrontendSetup(void);
+ #endif
+ 
+ /* ----------- Read the LEDs ---------- */
+-#ifdef MODKAMRU_V3
++#ifdef MODKAMRU_V3 //Redefine LED state reading macros
+   #define HAL_STATE_LED1()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_1))
+   #define HAL_STATE_LED2()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_2))
+   #define HAL_STATE_LED3()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_3))
+   #define HAL_STATE_LED4()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_4))
+-#else
++#else //Not a MODKAMRU board
+   #define HAL_STATE_LED1()          GPIOPinRead(BSP_LED_BASE, BSP_LED_1)
+   #define HAL_STATE_LED2()          GPIOPinRead(BSP_LED_BASE, BSP_LED_2)
+   #define HAL_STATE_LED3()          GPIOPinRead(BSP_LED_BASE, BSP_LED_3)
+diff --git a/Components/hal/target/CC2538ZNP/hal_led.c b/Components/hal/target/CC2538ZNP/hal_led.c
+index 1a6e636..cf560e9 100644
+--- a/Components/hal/target/CC2538ZNP/hal_led.c
++++ b/Components/hal/target/CC2538ZNP/hal_led.c
+@@ -103,6 +103,18 @@ void HalLedOnOff (uint8 leds, uint8 mode);
+  *                                            FUNCTIONS - API
+  ***************************************************************************************************/
+ 
++#ifdef MODKAMRU_V3 // LED control helpers
++  // Dynamically enable/disable LEDs
++bool gbModkamUseLeds = true;
++void modkamUseLeds(bool enable){
++  gbModkamUseLeds=enable;
++  if(!enable)
++    HalLedSet(HAL_LED_ALL,HAL_LED_MODE_OFF);
++  else
++    HalLedSet(HAL_LED_1,HAL_LED_MODE_ON);// Light on power LED
++}
++#endif
++
+ /***************************************************************************************************
+  * @fn      HalLedInit
+  *
+diff --git a/Components/mt/MT_UTIL.c b/Components/mt/MT_UTIL.c
+index b4a24d8..68d7ceb 100644
+--- a/Components/mt/MT_UTIL.c
++++ b/Components/mt/MT_UTIL.c
+@@ -921,6 +921,12 @@ static void MT_UtilLedControl(uint8 *pBuf)
+   /* LED and Mode */
+   iLed = *pBuf++;
+   iMode = *pBuf;
++  
++#ifdef MODKAMRU_V3
++  if(iMode==0)
++    modkamUseLeds(false);
++  else modkamUseLeds(true);
++#endif
+ 
+   if ( iLed == 1 )
+     Led = HAL_LED_1;
+diff --git a/Components/mt/revision_info.h b/Components/mt/revision_info.h
+index 72f311a..6b216cf 100644
+--- a/Components/mt/revision_info.h
++++ b/Components/mt/revision_info.h
+@@ -1 +1 @@
+-#define CODE_REVISION_NUMBER 20191217
+\ No newline at end of file
++#define CODE_REVISION_NUMBER 20200124
+\ No newline at end of file
+diff --git a/Components/stack/zdo/ZDObject.c b/Components/stack/zdo/ZDObject.c
+index dcb6efa..29c8adc 100644
+--- a/Components/stack/zdo/ZDObject.c
++++ b/Components/stack/zdo/ZDObject.c
+@@ -76,6 +76,10 @@
+ /* HAL */
+ #include "hal_lcd.h"
+ 
++#ifdef MODKAMRU_V3
++#include "hal_led.h"
++#endif
++
+ /*********************************************************************
+  * MACROS
+  */
+@@ -1957,6 +1961,12 @@ void ZDO_ProcessMgmtPermitJoinReq( zdoIncomingMsg_t *inMsg )
+ #endif
+   
+   duration = inMsg->asdu[ZDP_MGMT_PERMIT_JOIN_REQ_DURATION];
++  
++#ifdef MODKAMRU_V3
++  if(duration==0)
++    MODKAM_LED_OFF(HAL_LED_3)
++  else MODKAM_LED_BLINK(HAL_LED_3,duration/2,50,2000)
++#endif
+   // Per R21 Spec this field is not longer relevant 2.4.3.3.7.2 (Mgmt_Permit_Joining_req Effect on Receipt)
+   //tcsig    = inMsg->asdu[ZDP_MGMT_PERMIT_JOIN_REQ_TC_SIG];
+ 
+diff --git a/Projects/zstack/ZMain/TI2538ZNP/ZMain.c b/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
+index 812bb75..0d3a44f 100644
+--- a/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
++++ b/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
+@@ -166,10 +166,10 @@ int main( void )
+ #endif
+   
+ #ifdef MODKAMRU_V3
+-  /* Led test */
+-  HalLedBlink(HAL_LED_ALL,1,90,1000);
+-  /* Power led on */
+-  HalLedSet(HAL_LED_1,HAL_LED_MODE_ON);
++  // Test all LEDs
++  MODKAM_LED_BLINK_LONG(HAL_LED_ALL);
++  // Power LED on
++  MODKAM_LED_ON(HAL_LED_1);
+ #endif
+ 
+   osal_start_system(); /* No Return from here */
+diff --git a/Projects/zstack/ZNP/Source/znp_app.c b/Projects/zstack/ZNP/Source/znp_app.c
+index 16182f2..668cfb3 100644
+--- a/Projects/zstack/ZNP/Source/znp_app.c
++++ b/Projects/zstack/ZNP/Source/znp_app.c
+@@ -161,7 +161,7 @@ void znpInit(uint8 taskId)
+ uint16 znpEventLoop(uint8 taskId, uint16 events)
+ {
+ #ifdef MODKAMRU_V3
+-  HalLedBlink(HAL_LED_4,1,50,100);
++  MODKAM_LED_BLINK_SHORT(HAL_LED_4);
+ #endif
+   
+   osal_event_hdr_t *pMsg;
 -- 
 2.24.1.windows.2
 

@@ -1,7 +1,7 @@
 From abf7417d45d8ccba02479b0c3d9303f9bb9c9770 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Thu, 23 Jan 2020 14:28:49 +0200
-Subject: [PATCH 1/5] minimal working coordinator
+Subject: [PATCH 1/7] minimal working coordinator
 
 
 diff --git a/Components/hal/target/CC2538ZNP/hal_board_cfg.h b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
@@ -181,7 +181,7 @@ index 2b8d56d..c4f48c8 100644
 From 17ea23369c23feaa20f676f3b60d0de102f86e41 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Thu, 23 Jan 2020 15:23:13 +0200
-Subject: [PATCH 2/5] added led support
+Subject: [PATCH 2/7] added led support
 
 
 diff --git a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
@@ -377,7 +377,7 @@ index c4f48c8..3de9bd9 100644
 From 096280f929c9a2104fa298f7297437abe5322d68 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Thu, 23 Jan 2020 15:29:44 +0200
-Subject: [PATCH 3/5] blink on every znp event
+Subject: [PATCH 3/7] blink on every znp event
 
 
 diff --git a/Projects/zstack/ZNP/Source/znp_app.c b/Projects/zstack/ZNP/Source/znp_app.c
@@ -413,7 +413,7 @@ index 31b115e..16182f2 100644
 From 73beec4e66fbda50964edb2c25f9bc0948b7921f Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Fri, 24 Jan 2020 13:07:08 +0200
-Subject: [PATCH 4/5] Blinking on permit_join: true Turn off leds on serial:  
+Subject: [PATCH 4/7] Blinking on permit_join: true Turn off leds on serial:  
  disable_led: true
 
 
@@ -642,7 +642,7 @@ index 16182f2..668cfb3 100644
 From 8108f6c1f53d24b39cbbd0c2a2cd418bcd690b91 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
 Date: Fri, 24 Jan 2020 17:35:24 +0200
-Subject: [PATCH 5/5] Data buffers increased
+Subject: [PATCH 5/7] Data buffers increased
 
 
 diff --git a/Components/stack/bdb/bdb_FindingAndBinding.c b/Components/stack/bdb/bdb_FindingAndBinding.c
@@ -694,6 +694,129 @@ index 9d095fa..cb8abf6 100644
  
  //
  // Define a block for the heap.  The size should be set to something other
+-- 
+2.24.1.windows.2
+
+
+From edf3ceeeebb3bdd96e791395a34c76e10994fb2d Mon Sep 17 00:00:00 2001
+From: Alex Gavr <reverieline@gmail.com>
+Date: Tue, 28 Jan 2020 11:14:20 +0200
+Subject: [PATCH 6/7] Increase UART buffers and timeouts for better stability.
+
+
+diff --git a/Projects/zstack/ZMain/TI2538ZNP/OnBoard.h b/Projects/zstack/ZMain/TI2538ZNP/OnBoard.h
+index 02bce67..3271563 100644
+--- a/Projects/zstack/ZMain/TI2538ZNP/OnBoard.h
++++ b/Projects/zstack/ZMain/TI2538ZNP/OnBoard.h
+@@ -120,10 +120,17 @@ extern uint8 aExtendedAddress[8];
+ /* SOC defines the ideal sizes in the 
+  * individual _hal_uart_dma/isr.c modules.
+  */
+-#define HAL_UART_FLOW_THRESHOLD    5
+-#define HAL_UART_RX_BUF_SIZE       170
+-#define HAL_UART_TX_BUF_SIZE       120
+-#define HAL_UART_IDLE_TIMEOUT      5
++#ifdef MODKAMRU_V3
++  #define HAL_UART_FLOW_THRESHOLD    10
++  #define HAL_UART_RX_BUF_SIZE       340
++  #define HAL_UART_TX_BUF_SIZE       240
++  #define HAL_UART_IDLE_TIMEOUT      10
++#else
++  #define HAL_UART_FLOW_THRESHOLD    5
++  #define HAL_UART_RX_BUF_SIZE       170
++  #define HAL_UART_TX_BUF_SIZE       120
++  #define HAL_UART_IDLE_TIMEOUT      5
++#endif
+ 
+ /* Restart system from absolute beginning
+  * Disables interrupts, forces WatchDog reset
+-- 
+2.24.1.windows.2
+
+
+From 32372145a154ce9189397d10da44e221fd439452 Mon Sep 17 00:00:00 2001
+From: Alex Gavr <reverieline@gmail.com>
+Date: Tue, 28 Jan 2020 12:26:11 +0200
+Subject: [PATCH 7/7] UART support added
+
+
+diff --git a/Components/hal/target/CC2538ZNP/hal_uart_isr.c b/Components/hal/target/CC2538ZNP/hal_uart_isr.c
+index a6ce62b..0e34aec 100644
+--- a/Components/hal/target/CC2538ZNP/hal_uart_isr.c
++++ b/Components/hal/target/CC2538ZNP/hal_uart_isr.c
+@@ -160,10 +160,17 @@ uint8 HalUARTOpenIsr(uint8 port, halUARTCfg_t *config)
+   
+   if(config->flowControl)
+   {
++#ifdef MODKAMRU_V3
++    IOCPinConfigPeriphOutput(GPIO_D_BASE, GPIO_PIN_1, IOC_MUX_OUT_SEL_UART1_RTS);
++    GPIOPinTypeUARTOutput(GPIO_D_BASE, GPIO_PIN_1);
++    IOCPinConfigPeriphInput(GPIO_B_BASE, GPIO_PIN_0, IOC_UARTCTS_UART1);
++    GPIOPinTypeUARTInput(GPIO_B_BASE, GPIO_PIN_0);
++#else
+     IOCPinConfigPeriphOutput(GPIO_D_BASE, GPIO_PIN_3, IOC_MUX_OUT_SEL_UART1_RTS);
+     GPIOPinTypeUARTOutput(GPIO_D_BASE, GPIO_PIN_3);
+     IOCPinConfigPeriphInput(GPIO_B_BASE, GPIO_PIN_0, IOC_UARTCTS_UART1);
+     GPIOPinTypeUARTInput(GPIO_B_BASE, GPIO_PIN_0);
++#endif
+   }
+   
+   IntEnable(HAL_UART_INT_CTRL);
+@@ -364,11 +371,14 @@ uint16 HalUARTWriteIsr(uint8 port, uint8 *pBuffer, uint16 length)
+     cnt = idx - cnt;
+   }
+ 
++#ifdef MODKAMRU_V3
++#else
+   /* Accept "all-or-none" on write request. */
+   if (cnt < length)
+   {
+     return 0;
+   }
++#endif
+ 
+   txMT = false;
+   idx = uartRecord.tx.bufferTail;
+diff --git a/Components/mt/revision_info.h b/Components/mt/revision_info.h
+index 6b216cf..636ccc8 100644
+--- a/Components/mt/revision_info.h
++++ b/Components/mt/revision_info.h
+@@ -1 +1 @@
+-#define CODE_REVISION_NUMBER 20200124
+\ No newline at end of file
++#define CODE_REVISION_NUMBER 20200128
+\ No newline at end of file
+diff --git a/Projects/zstack/ZNP/Source/znp_app.c b/Projects/zstack/ZNP/Source/znp_app.c
+index 668cfb3..fc188d4 100644
+--- a/Projects/zstack/ZNP/Source/znp_app.c
++++ b/Projects/zstack/ZNP/Source/znp_app.c
+@@ -516,6 +516,18 @@ static void npBasicRsp(void)
+  */
+ static void npUartCback(uint8 port, uint8 event)
+ {
++#ifdef MODKAMRU_V3
++  // There can be multiple  event bits in event argument
++  if(
++     (event & HAL_UART_RX_FULL) ||
++     (event & HAL_UART_RX_ABOUT_FULL) ||
++     (event & HAL_UART_RX_TIMEOUT) 
++     ){
++    MT_UartProcessZToolData(port, znpTaskId);
++  }else if(event & HAL_UART_TX_EMPTY){
++    osal_set_event(znpTaskId, ZNP_UART_TX_READY_EVENT);
++  }
++#else
+   switch (event) {
+   case HAL_UART_RX_FULL:
+   case HAL_UART_RX_ABOUT_FULL:
+@@ -530,6 +542,7 @@ static void npUartCback(uint8 port, uint8 event)
+   default:
+     break;
+   }
++#endif
+ }
+ 
+ /**************************************************************************************************
 -- 
 2.24.1.windows.2
 

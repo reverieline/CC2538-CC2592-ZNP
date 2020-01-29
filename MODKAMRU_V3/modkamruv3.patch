@@ -1,11 +1,104 @@
-From abf7417d45d8ccba02479b0c3d9303f9bb9c9770 Mon Sep 17 00:00:00 2001
+From 39b182bf308683304840b23b31923ca75849d811 Mon Sep 17 00:00:00 2001
 From: Alex Gavr <reverieline@gmail.com>
-Date: Thu, 23 Jan 2020 14:28:49 +0200
-Subject: [PATCH 1/7] minimal working coordinator
+Date: Wed, 29 Jan 2020 10:01:25 +0200
+Subject: [PATCH] Basic MODKAMRU_V3 patch
 
 
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..8a8c68b
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,27 @@
++*.html
++*.txt
++!note.txt
++*.eww
++*.ewd
++*.ewp
++*.pdf
++*.s51
++*.xcl
++*.exe
++*.lib
++*.dep
++
++Accessories/
++Components/hal/target/CC2530USB/usb/driver/
++_iss/
++Tools/
++Projects/zstack/Libraries/
++Projects/zstack/OTA/Boot/CC2538/Image Boot Manager/
++Projects/zstack/Utilities/BootLoad/CC2538_SPI/bin/
++Projects/zstack/Utilities/BootLoad/CC2538_UART/bin/
++Projects/zstack/ZNP/CC2538/bin/
++Projects/zstack/ZNP/CC2538/dev/
++Projects/zstack/ZNP/CC253x/bin/
++Projects/zstack/ZNP/CC253x/dev/
++Projects/zstack/ZNP/CC2538/CC2538ZNP-Debug/
++Projects/zstack/ZNP/CC2538/settings/
+\ No newline at end of file
+diff --git a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
+index 38ac3d9..44c0d5b 100644
+--- a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
++++ b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
+@@ -81,15 +81,21 @@ extern "C"
+ #define BSP_3V3_EN              GPIO_PIN_4      //!< PB4
+ 
+ // Board LED defines
+-#define BSP_LED_BASE            GPIO_C_BASE
+-#define BSP_LED_1               GPIO_PIN_0      //!< PC0
+-#define BSP_LED_2               GPIO_PIN_1      //!< PC1
+-#define BSP_LED_3               GPIO_PIN_2      //!< PC2
+-#define BSP_LED_4               GPIO_PIN_3      //!< PC3
+-#define BSP_LED_ALL             (BSP_LED_1 | \
+-                                 BSP_LED_2 | \
+-                                 BSP_LED_3 | \
+-                                 BSP_LED_4)     //!< Bitmask of all LEDs
++#ifdef MODKAMRU_V3 // Redefine board LEDs
++  #define BSP_LED_BASE            GPIO_B_BASE
++  #define BSP_LED_1               GPIO_PIN_1
++  #define BSP_LED_2               GPIO_PIN_2
++  #define BSP_LED_3               GPIO_PIN_3
++  #define BSP_LED_4               GPIO_PIN_4
++  #define BSP_LED_ALL             (BSP_LED_1 | BSP_LED_2 | BSP_LED_3 | BSP_LED_4)
++#else //Not a MODKAMRU board
++  #define BSP_LED_BASE            GPIO_C_BASE
++  #define BSP_LED_1               GPIO_PIN_0      //!< PC0
++  #define BSP_LED_2               GPIO_PIN_1      //!< PC1
++  #define BSP_LED_3               GPIO_PIN_2      //!< PC2
++  #define BSP_LED_4               GPIO_PIN_3      //!< PC3
++  #define BSP_LED_ALL             (BSP_LED_1 | BSP_LED_2 | BSP_LED_3 | BSP_LED_4)     //!< Bitmask of all LEDs
++#endif
+ 
+ // Board key defines
+ #define BSP_KEY_DIR_BASE        GPIO_C_BASE     //!< Base for left/right/up/down
+diff --git a/Components/hal/include/hal_led.h b/Components/hal/include/hal_led.h
+index bb327f1..846dea2 100644
+--- a/Components/hal/include/hal_led.h
++++ b/Components/hal/include/hal_led.h
+@@ -87,6 +87,19 @@ extern "C"
+  * GLOBAL VARIABLES
+  */
+ 
++#ifdef MODKAMRU_V3 //LED control helpers
++  /* Dynamically enable/disable LEDs */
++  extern bool gbModkamUseLeds;
++  extern void modkamUseLeds(bool);
++
++  /* LED control macros */
++#define MODKAM_LED_ON(leds) {if(gbModkamUseLeds)HalLedSet(leds,HAL_LED_MODE_ON);}
++#define MODKAM_LED_OFF(leds) {if(gbModkamUseLeds)HalLedSet(leds,HAL_LED_MODE_OFF);}
++#define MODKAM_LED_BLINK(leds,count,duty,duration) {if(gbModkamUseLeds)HalLedBlink(leds,count,duty,duration);}
++#define MODKAM_LED_BLINK_LONG(leds) MODKAM_LED_BLINK(leds,1,90,1000)
++#define MODKAM_LED_BLINK_SHORT(leds) MODKAM_LED_BLINK(leds,1,50,100)
++#endif
++
+ /*
+  * Initialize LED Service.
+  */
 diff --git a/Components/hal/target/CC2538ZNP/hal_board_cfg.h b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
-index 0bc45b5..a6ae08a 100644
+index 0bc45b5..3de1993 100644
 --- a/Components/hal/target/CC2538ZNP/hal_board_cfg.h
 +++ b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
 @@ -231,7 +231,7 @@ extern unsigned char znpCfg0;
@@ -17,6 +110,156 @@ index 0bc45b5..a6ae08a 100644
  #define HAL_NV_PAGE_BEG           (HAL_NV_PAGE_END-HAL_NV_PAGE_CNT+1)
  #define HAL_NV_START_ADDR         ((FLASH_BASE) + (HAL_NV_PAGE_BEG * HAL_FLASH_PAGE_SIZE))
  
+@@ -300,6 +300,7 @@ extern void MAC_RfFrontendSetup(void);
+ /* ----------- Board Initialization ---------- */
+ #define HAL_BOARD_INIT()                                                   \
+ {                                                                          \
++  HAL_BOARD_LED_INIT();                                                    \
+   HAL_BOARD_COMMON_INIT()                                                  \
+   HAL_BOARD_PA_LNA_INIT();                                                 \
+   HAL_BOARD_RF_FRONTEND_SETUP();                                           \
+@@ -340,15 +341,34 @@ extern void MAC_RfFrontendSetup(void);
+ }
+ 
+ /* ----------- LED's ---------- */
+-#define HAL_TURN_OFF_LED1()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, 0)
+-#define HAL_TURN_OFF_LED2()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, 0)
+-#define HAL_TURN_OFF_LED3()       //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, 0)
+-#define HAL_TURN_OFF_LED4()       //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, 0)
++#ifdef MODKAMRU_V3 //Set LED pins to output mode
++  #define HAL_BOARD_LED_INIT() GPIOPinTypeGPIOOutput(BSP_LED_BASE,BSP_LED_ALL)
++#else
++  #define HAL_BOARD_LED_INIT()
++#endif
++
++#ifdef MODKAMRU_V3 //Redefine LED contorl macros
++  #define HAL_TURN_OFF_LED1()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, BSP_LED_1)
++  #define HAL_TURN_OFF_LED2()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, BSP_LED_2)
++  #define HAL_TURN_OFF_LED3()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, BSP_LED_3)
++  #define HAL_TURN_OFF_LED4()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, BSP_LED_4)
++
++  #define HAL_TURN_ON_LED1()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, 0)
++  #define HAL_TURN_ON_LED2()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, 0)
++  #define HAL_TURN_ON_LED3()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, 0)
++  #define HAL_TURN_ON_LED4()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, 0)
++#else /* Not a MODKAMRU board */
++  #define HAL_TURN_OFF_LED1()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, 0)
++  #define HAL_TURN_OFF_LED2()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, 0)
++  #define HAL_TURN_OFF_LED3()       //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, 0)
++  #define HAL_TURN_OFF_LED4()       //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, 0)
++
++  #define HAL_TURN_ON_LED1()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, BSP_LED_1)
++  #define HAL_TURN_ON_LED2()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, BSP_LED_2)
++  #define HAL_TURN_ON_LED3()        //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, BSP_LED_3)
++  #define HAL_TURN_ON_LED4()        //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, BSP_LED_4)
++#endif
+ 
+-#define HAL_TURN_ON_LED1()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, BSP_LED_1)
+-#define HAL_TURN_ON_LED2()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, BSP_LED_2)
+-#define HAL_TURN_ON_LED3()        //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, BSP_LED_3)
+-#define HAL_TURN_ON_LED4()        //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, BSP_LED_4)
+ 
+ #define HAL_CLR_GPIO_00()         GPIOPinWrite(BSP_LED_BASE, GPIO_PIN_2, 0)  // LED3
+ #define HAL_CLR_GPIO_02()         GPIOPinWrite(BSP_LED_BASE, GPIO_PIN_3, 0)  // LED4
+@@ -357,16 +377,30 @@ extern void MAC_RfFrontendSetup(void);
+ #define HAL_SET_GPIO_02()         GPIOPinWrite(BSP_LED_BASE, GPIO_PIN_3, GPIO_PIN_3)  // LED4
+ 
+ /* ----------- Toggle the LEDs ---------- */
+-#define HAL_TOGGLE_LED1()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_1)))
+-#define HAL_TOGGLE_LED2()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_2)))
+-#define HAL_TOGGLE_LED3()         //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_3)))
+-#define HAL_TOGGLE_LED4()         //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_4)))
++#ifdef MODKAMRU_V3 //Redefine LED contorl macros
++  #define HAL_TOGGLE_LED1()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_1)))
++  #define HAL_TOGGLE_LED2()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_2)))
++  #define HAL_TOGGLE_LED3()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_3)))
++  #define HAL_TOGGLE_LED4()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_4)))
++#else //Not a MODKAMRU board
++  #define HAL_TOGGLE_LED1()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_1)))
++  #define HAL_TOGGLE_LED2()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_2)))
++  #define HAL_TOGGLE_LED3()         //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_3)))
++  #define HAL_TOGGLE_LED4()         //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_4)))
++#endif
+ 
+ /* ----------- Read the LEDs ---------- */
+-#define HAL_STATE_LED1()          GPIOPinRead(BSP_LED_BASE, BSP_LED_1)
+-#define HAL_STATE_LED2()          GPIOPinRead(BSP_LED_BASE, BSP_LED_2)
+-#define HAL_STATE_LED3()          GPIOPinRead(BSP_LED_BASE, BSP_LED_3)
+-#define HAL_STATE_LED4()          GPIOPinRead(BSP_LED_BASE, BSP_LED_4)
++#ifdef MODKAMRU_V3 //Redefine LED state reading macros
++  #define HAL_STATE_LED1()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_1))
++  #define HAL_STATE_LED2()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_2))
++  #define HAL_STATE_LED3()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_3))
++  #define HAL_STATE_LED4()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_4))
++#else //Not a MODKAMRU board
++  #define HAL_STATE_LED1()          GPIOPinRead(BSP_LED_BASE, BSP_LED_1)
++  #define HAL_STATE_LED2()          GPIOPinRead(BSP_LED_BASE, BSP_LED_2)
++  #define HAL_STATE_LED3()          GPIOPinRead(BSP_LED_BASE, BSP_LED_3)
++  #define HAL_STATE_LED4()          GPIOPinRead(BSP_LED_BASE, BSP_LED_4)
++#endif
+ 
+ #define HAL_PUSH_BUTTON1()(PUSH_BTN_POLARITY (GPIOPinRead(BSP_KEY_SEL_BASE, BSP_KEY_SELECT)))
+ 
+diff --git a/Components/hal/target/CC2538ZNP/hal_led.c b/Components/hal/target/CC2538ZNP/hal_led.c
+index 1a6e636..cf560e9 100644
+--- a/Components/hal/target/CC2538ZNP/hal_led.c
++++ b/Components/hal/target/CC2538ZNP/hal_led.c
+@@ -103,6 +103,18 @@ void HalLedOnOff (uint8 leds, uint8 mode);
+  *                                            FUNCTIONS - API
+  ***************************************************************************************************/
+ 
++#ifdef MODKAMRU_V3 // LED control helpers
++  // Dynamically enable/disable LEDs
++bool gbModkamUseLeds = true;
++void modkamUseLeds(bool enable){
++  gbModkamUseLeds=enable;
++  if(!enable)
++    HalLedSet(HAL_LED_ALL,HAL_LED_MODE_OFF);
++  else
++    HalLedSet(HAL_LED_1,HAL_LED_MODE_ON);// Light on power LED
++}
++#endif
++
+ /***************************************************************************************************
+  * @fn      HalLedInit
+  *
+diff --git a/Components/hal/target/CC2538ZNP/hal_uart_isr.c b/Components/hal/target/CC2538ZNP/hal_uart_isr.c
+index a6ce62b..0e34aec 100644
+--- a/Components/hal/target/CC2538ZNP/hal_uart_isr.c
++++ b/Components/hal/target/CC2538ZNP/hal_uart_isr.c
+@@ -160,10 +160,17 @@ uint8 HalUARTOpenIsr(uint8 port, halUARTCfg_t *config)
+   
+   if(config->flowControl)
+   {
++#ifdef MODKAMRU_V3
++    IOCPinConfigPeriphOutput(GPIO_D_BASE, GPIO_PIN_1, IOC_MUX_OUT_SEL_UART1_RTS);
++    GPIOPinTypeUARTOutput(GPIO_D_BASE, GPIO_PIN_1);
++    IOCPinConfigPeriphInput(GPIO_B_BASE, GPIO_PIN_0, IOC_UARTCTS_UART1);
++    GPIOPinTypeUARTInput(GPIO_B_BASE, GPIO_PIN_0);
++#else
+     IOCPinConfigPeriphOutput(GPIO_D_BASE, GPIO_PIN_3, IOC_MUX_OUT_SEL_UART1_RTS);
+     GPIOPinTypeUARTOutput(GPIO_D_BASE, GPIO_PIN_3);
+     IOCPinConfigPeriphInput(GPIO_B_BASE, GPIO_PIN_0, IOC_UARTCTS_UART1);
+     GPIOPinTypeUARTInput(GPIO_B_BASE, GPIO_PIN_0);
++#endif
+   }
+   
+   IntEnable(HAL_UART_INT_CTRL);
+@@ -364,11 +371,14 @@ uint16 HalUARTWriteIsr(uint8 port, uint8 *pBuffer, uint16 length)
+     cnt = idx - cnt;
+   }
+ 
++#ifdef MODKAMRU_V3
++#else
+   /* Accept "all-or-none" on write request. */
+   if (cnt < length)
+   {
+     return 0;
+   }
++#endif
+ 
+   txMT = false;
+   idx = uartRecord.tx.bufferTail;
 diff --git a/Components/mt/MT_SYS.c b/Components/mt/MT_SYS.c
 index aa57766..9b3cb3d 100644
 --- a/Components/mt/MT_SYS.c
@@ -48,6 +291,23 @@ index aa57766..9b3cb3d 100644
  
    // Plug the SBL revision indication
    UINT32_TO_BUF_LITTLE_ENDIAN(pBuf,sblRev);
+diff --git a/Components/mt/MT_UTIL.c b/Components/mt/MT_UTIL.c
+index b4a24d8..d9e461d 100644
+--- a/Components/mt/MT_UTIL.c
++++ b/Components/mt/MT_UTIL.c
+@@ -922,6 +922,12 @@ static void MT_UtilLedControl(uint8 *pBuf)
+   iLed = *pBuf++;
+   iMode = *pBuf;
+ 
++#ifdef MODKAMRU_V3
++  if(iMode==0)
++    modkamUseLeds(false);
++  else modkamUseLeds(true);
++#endif
++
+   if ( iLed == 1 )
+     Led = HAL_LED_1;
+   else if ( iLed == 2 )
 diff --git a/Components/mt/MT_VERSION.c b/Components/mt/MT_VERSION.c
 index f374554..f2e3de9 100644
 --- a/Components/mt/MT_VERSION.c
@@ -63,11 +323,11 @@ index f374554..f2e3de9 100644
                                     2,  /* Software maintenance release number */
 diff --git a/Components/mt/revision_info.h b/Components/mt/revision_info.h
 new file mode 100644
-index 0000000..72f311a
+index 0000000..636ccc8
 --- /dev/null
 +++ b/Components/mt/revision_info.h
 @@ -0,0 +1 @@
-+#define CODE_REVISION_NUMBER 20191217
++#define CODE_REVISION_NUMBER 20200128
 \ No newline at end of file
 diff --git a/Components/osal/mcu/cc2538/osal_nv.c b/Components/osal/mcu/cc2538/osal_nv.c
 index 9275e64..7e2fee5 100644
@@ -121,530 +381,6 @@ index 5e54237..c88b195 100644
    else if ( (epDesc = afFindEndPointDesc( aff->DstEndPoint )) )
    {
      pList = afFindEndPointDescList( epDesc->endPoint );
-diff --git a/Components/stack/sys/ZGlobals.c b/Components/stack/sys/ZGlobals.c
-index d170283..e251f15 100644
---- a/Components/stack/sys/ZGlobals.c
-+++ b/Components/stack/sys/ZGlobals.c
-@@ -212,7 +212,10 @@ uint8 zgEndDeviceConfiguration = END_DEV_CONFIGURATION;
- //
- // NOTICE:  Before enabling Child Aging make sure to review all the related
- // definitions in this file, especially zgNwkParentInformation.
--uint8 zgChildAgingEnable = TRUE;
-+/**
-+ * Disable child aging, otherwise Xiaomi devices are being kicked off the network.
-+ */
-+uint8 zgChildAgingEnable = FALSE;
- 
- //==========    TouchLink NWK configuration    ===============
- // Values used by Router when starts a network as initiator
-diff --git a/Projects/zstack/Tools/CC2538DB/CC2538.icf b/Projects/zstack/Tools/CC2538DB/CC2538.icf
-index d4c95cc..9d095fa 100644
---- a/Projects/zstack/Tools/CC2538DB/CC2538.icf
-+++ b/Projects/zstack/Tools/CC2538DB/CC2538.icf
-@@ -15,7 +15,7 @@ define memory mem with size = 4G;
- //
- // Define a region for the on-chip program code space.
- //
--define region FLASH = mem:[from 0x00200000 to 0x0027C7FF];
-+define region FLASH = mem:[from 0x00200000 to 0x002797FF];
- 
- //
- // Define a region for the OTA CRC structure.
-@@ -39,7 +39,7 @@ define region FLASH = mem:[from 0x00200000 to 0x0027C7FF];
- //   The size of this region MUST MATCH the size defined by "HAL_NV_PAGE_CNT"
- //   in the file: hal_board_cfg.h
- //
--define region NV_MEM = mem:[from 0x0027C800 to 0x0027F7FF];
-+define region NV_MEM = mem:[from 0x00279800 to 0x0027F7FF];
- 
- //
- // Define regions for on-chip factory Commissioning Parameters.
-diff --git a/Projects/zstack/ZNP/Source/znp.cfg b/Projects/zstack/ZNP/Source/znp.cfg
-index 2b8d56d..c4f48c8 100644
---- a/Projects/zstack/ZNP/Source/znp.cfg
-+++ b/Projects/zstack/ZNP/Source/znp.cfg
-@@ -107,3 +107,9 @@
- -DMT_APP_FUNC
- -DMT_APP_CNF_FUNC
- 
-+//Additional flags
-+-DINCLUDE_REVISION_INFORMATION
-+-DMT_SYS_KEY_MANAGEMENT=1
-+-DTP2_LEGACY_ZC
-+-DHAL_PA_LNA
-+-DHAL_PA_LNA_CC2592
-\ No newline at end of file
--- 
-2.24.1.windows.2
-
-
-From 17ea23369c23feaa20f676f3b60d0de102f86e41 Mon Sep 17 00:00:00 2001
-From: Alex Gavr <reverieline@gmail.com>
-Date: Thu, 23 Jan 2020 15:23:13 +0200
-Subject: [PATCH 2/7] added led support
-
-
-diff --git a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
-index 38ac3d9..b983904 100644
---- a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
-+++ b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
-@@ -81,16 +81,22 @@ extern "C"
- #define BSP_3V3_EN              GPIO_PIN_4      //!< PB4
- 
- // Board LED defines
--#define BSP_LED_BASE            GPIO_C_BASE
--#define BSP_LED_1               GPIO_PIN_0      //!< PC0
--#define BSP_LED_2               GPIO_PIN_1      //!< PC1
--#define BSP_LED_3               GPIO_PIN_2      //!< PC2
--#define BSP_LED_4               GPIO_PIN_3      //!< PC3
--#define BSP_LED_ALL             (BSP_LED_1 | \
--                                 BSP_LED_2 | \
--                                 BSP_LED_3 | \
--                                 BSP_LED_4)     //!< Bitmask of all LEDs
--
-+#ifdef MODKAMRU_V3
-+  #define BSP_LED_BASE            GPIO_B_BASE
-+  #define BSP_LED_1               GPIO_PIN_1      //!< PC0
-+  #define BSP_LED_2               GPIO_PIN_2      //!< PC1
-+  #define BSP_LED_3               GPIO_PIN_3      //!< PC2
-+  #define BSP_LED_4               GPIO_PIN_4      //!< PC3
-+  #define BSP_LED_ALL             (BSP_LED_1 | BSP_LED_2 | BSP_LED_3 | BSP_LED_4)     //!< Bitmask of all LEDs
-+#else
-+  #define BSP_LED_BASE            GPIO_C_BASE
-+  #define BSP_LED_1               GPIO_PIN_0      //!< PC0
-+  #define BSP_LED_2               GPIO_PIN_1      //!< PC1
-+  #define BSP_LED_3               GPIO_PIN_2      //!< PC2
-+  #define BSP_LED_4               GPIO_PIN_3      //!< PC3
-+  #define BSP_LED_ALL             (BSP_LED_1 | BSP_LED_2 | BSP_LED_3 | BSP_LED_4)     //!< Bitmask of all LEDs
-+#endif
-+  
- // Board key defines
- #define BSP_KEY_DIR_BASE        GPIO_C_BASE     //!< Base for left/right/up/down
- #define BSP_KEY_SEL_BASE        GPIO_A_BASE     //!< Base for Select
-diff --git a/Components/hal/target/CC2538ZNP/hal_board_cfg.h b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
-index a6ae08a..bde4def 100644
---- a/Components/hal/target/CC2538ZNP/hal_board_cfg.h
-+++ b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
-@@ -300,6 +300,7 @@ extern void MAC_RfFrontendSetup(void);
- /* ----------- Board Initialization ---------- */
- #define HAL_BOARD_INIT()                                                   \
- {                                                                          \
-+  HAL_BOARD_LED_INIT();                                                    \
-   HAL_BOARD_COMMON_INIT()                                                  \
-   HAL_BOARD_PA_LNA_INIT();                                                 \
-   HAL_BOARD_RF_FRONTEND_SETUP();                                           \
-@@ -340,15 +341,34 @@ extern void MAC_RfFrontendSetup(void);
- }
- 
- /* ----------- LED's ---------- */
--#define HAL_TURN_OFF_LED1()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, 0)
--#define HAL_TURN_OFF_LED2()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, 0)
--#define HAL_TURN_OFF_LED3()       //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, 0)
--#define HAL_TURN_OFF_LED4()       //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, 0)
-+#ifdef MODKAMRU_V3
-+  #define HAL_BOARD_LED_INIT() GPIOPinTypeGPIOOutput(BSP_LED_BASE,BSP_LED_ALL)
-+#else
-+  #define HAL_BOARD_LED_INIT()
-+#endif
-+
-+#ifdef MODKAMRU_V3
-+  #define HAL_TURN_OFF_LED1()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, BSP_LED_1)
-+  #define HAL_TURN_OFF_LED2()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, BSP_LED_2)
-+  #define HAL_TURN_OFF_LED3()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, BSP_LED_3)
-+  #define HAL_TURN_OFF_LED4()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, BSP_LED_4)
-+
-+  #define HAL_TURN_ON_LED1()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, 0)
-+  #define HAL_TURN_ON_LED2()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, 0)
-+  #define HAL_TURN_ON_LED3()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, 0)
-+  #define HAL_TURN_ON_LED4()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, 0)
-+#else /* Not a Modkam.ru V3 board */
-+  #define HAL_TURN_OFF_LED1()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, 0)
-+  #define HAL_TURN_OFF_LED2()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, 0)
-+  #define HAL_TURN_OFF_LED3()       //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, 0)
-+  #define HAL_TURN_OFF_LED4()       //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, 0)
-+
-+  #define HAL_TURN_ON_LED1()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, BSP_LED_1)
-+  #define HAL_TURN_ON_LED2()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, BSP_LED_2)
-+  #define HAL_TURN_ON_LED3()        //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, BSP_LED_3)
-+  #define HAL_TURN_ON_LED4()        //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, BSP_LED_4)
-+#endif
- 
--#define HAL_TURN_ON_LED1()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, BSP_LED_1)
--#define HAL_TURN_ON_LED2()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, BSP_LED_2)
--#define HAL_TURN_ON_LED3()        //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, BSP_LED_3)
--#define HAL_TURN_ON_LED4()        //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, BSP_LED_4)
- 
- #define HAL_CLR_GPIO_00()         GPIOPinWrite(BSP_LED_BASE, GPIO_PIN_2, 0)  // LED3
- #define HAL_CLR_GPIO_02()         GPIOPinWrite(BSP_LED_BASE, GPIO_PIN_3, 0)  // LED4
-@@ -357,16 +377,30 @@ extern void MAC_RfFrontendSetup(void);
- #define HAL_SET_GPIO_02()         GPIOPinWrite(BSP_LED_BASE, GPIO_PIN_3, GPIO_PIN_3)  // LED4
- 
- /* ----------- Toggle the LEDs ---------- */
--#define HAL_TOGGLE_LED1()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_1)))
--#define HAL_TOGGLE_LED2()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_2)))
--#define HAL_TOGGLE_LED3()         //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_3)))
--#define HAL_TOGGLE_LED4()         //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_4)))
-+#ifdef MODKAMRU_V3
-+  #define HAL_TOGGLE_LED1()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_1)))
-+  #define HAL_TOGGLE_LED2()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_2)))
-+  #define HAL_TOGGLE_LED3()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_3)))
-+  #define HAL_TOGGLE_LED4()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_4)))
-+#else
-+  #define HAL_TOGGLE_LED1()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_1)))
-+  #define HAL_TOGGLE_LED2()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_2)))
-+  #define HAL_TOGGLE_LED3()         //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_3)))
-+  #define HAL_TOGGLE_LED4()         //GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_4)))
-+#endif
- 
- /* ----------- Read the LEDs ---------- */
--#define HAL_STATE_LED1()          GPIOPinRead(BSP_LED_BASE, BSP_LED_1)
--#define HAL_STATE_LED2()          GPIOPinRead(BSP_LED_BASE, BSP_LED_2)
--#define HAL_STATE_LED3()          GPIOPinRead(BSP_LED_BASE, BSP_LED_3)
--#define HAL_STATE_LED4()          GPIOPinRead(BSP_LED_BASE, BSP_LED_4)
-+#ifdef MODKAMRU_V3
-+  #define HAL_STATE_LED1()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_1))
-+  #define HAL_STATE_LED2()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_2))
-+  #define HAL_STATE_LED3()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_3))
-+  #define HAL_STATE_LED4()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_4))
-+#else
-+  #define HAL_STATE_LED1()          GPIOPinRead(BSP_LED_BASE, BSP_LED_1)
-+  #define HAL_STATE_LED2()          GPIOPinRead(BSP_LED_BASE, BSP_LED_2)
-+  #define HAL_STATE_LED3()          GPIOPinRead(BSP_LED_BASE, BSP_LED_3)
-+  #define HAL_STATE_LED4()          GPIOPinRead(BSP_LED_BASE, BSP_LED_4)
-+#endif
- 
- #define HAL_PUSH_BUTTON1()(PUSH_BTN_POLARITY (GPIOPinRead(BSP_KEY_SEL_BASE, BSP_KEY_SELECT)))
- 
-@@ -403,7 +437,7 @@ extern void MAC_RfFrontendSetup(void);
- 
- /* Set to TRUE enable KEY usage, FALSE disable it */
- #ifndef HAL_KEY
--#define HAL_KEY FALSE
-+#define HAL_KEY dkamFALSE
- #endif
- 
- /* Set to TRUE enable UART usage, FALSE disable it */
-diff --git a/Projects/zstack/ZMain/TI2538ZNP/ZMain.c b/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
-index 5febd92..812bb75 100644
---- a/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
-+++ b/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
-@@ -48,6 +48,10 @@
- #include "OnBoard.h"
- #include "ZMAC.h"
- 
-+#ifdef MODKAMRU_V3
-+  #include "hal_led.h"
-+#endif
-+
- #ifndef NONWK
-   #include "AF.h"
- #endif
-@@ -160,6 +164,13 @@ int main( void )
-   /* If WDT is used, this is a good place to enable it. */
-   WatchDogEnable( WDTIMX );
- #endif
-+  
-+#ifdef MODKAMRU_V3
-+  /* Led test */
-+  HalLedBlink(HAL_LED_ALL,1,90,1000);
-+  /* Power led on */
-+  HalLedSet(HAL_LED_1,HAL_LED_MODE_ON);
-+#endif
- 
-   osal_start_system(); /* No Return from here */
- 
-diff --git a/Projects/zstack/ZNP/Source/znp.cfg b/Projects/zstack/ZNP/Source/znp.cfg
-index c4f48c8..3de9bd9 100644
---- a/Projects/zstack/ZNP/Source/znp.cfg
-+++ b/Projects/zstack/ZNP/Source/znp.cfg
-@@ -112,4 +112,9 @@
- -DMT_SYS_KEY_MANAGEMENT=1
- -DTP2_LEGACY_ZC
- -DHAL_PA_LNA
---DHAL_PA_LNA_CC2592
-\ No newline at end of file
-+-DHAL_PA_LNA_CC2592
-+
-+-DHAL_LED=TRUE
-+-DBLINK_LEDS
-+
-+-DMODKAMRU_V3
-\ No newline at end of file
--- 
-2.24.1.windows.2
-
-
-From 096280f929c9a2104fa298f7297437abe5322d68 Mon Sep 17 00:00:00 2001
-From: Alex Gavr <reverieline@gmail.com>
-Date: Thu, 23 Jan 2020 15:29:44 +0200
-Subject: [PATCH 3/7] blink on every znp event
-
-
-diff --git a/Projects/zstack/ZNP/Source/znp_app.c b/Projects/zstack/ZNP/Source/znp_app.c
-index 31b115e..16182f2 100644
---- a/Projects/zstack/ZNP/Source/znp_app.c
-+++ b/Projects/zstack/ZNP/Source/znp_app.c
-@@ -67,6 +67,10 @@
-   #include "zcl.h"
- #endif
- 
-+#ifdef MODKAMRU_V3
-+  #include "hal_led.h"
-+#endif
-+
- /* ------------------------------------------------------------------------------------------------
-  *                                           Local Functions
-  * ------------------------------------------------------------------------------------------------
-@@ -156,6 +160,10 @@ void znpInit(uint8 taskId)
-  */
- uint16 znpEventLoop(uint8 taskId, uint16 events)
- {
-+#ifdef MODKAMRU_V3
-+  HalLedBlink(HAL_LED_4,1,50,100);
-+#endif
-+  
-   osal_event_hdr_t *pMsg;
- #if !defined CC2531ZNP
-   uint8 *pBuf;
--- 
-2.24.1.windows.2
-
-
-From 73beec4e66fbda50964edb2c25f9bc0948b7921f Mon Sep 17 00:00:00 2001
-From: Alex Gavr <reverieline@gmail.com>
-Date: Fri, 24 Jan 2020 13:07:08 +0200
-Subject: [PATCH 4/7] Blinking on permit_join: true Turn off leds on serial:  
- disable_led: true
-
-
-diff --git a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
-index b983904..367699d 100644
---- a/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
-+++ b/Components/bsp/srf06eb_cc2538/drivers/source/bsp.h
-@@ -81,14 +81,14 @@ extern "C"
- #define BSP_3V3_EN              GPIO_PIN_4      //!< PB4
- 
- // Board LED defines
--#ifdef MODKAMRU_V3
-+#ifdef MODKAMRU_V3 // Redefine board LEDs
-   #define BSP_LED_BASE            GPIO_B_BASE
--  #define BSP_LED_1               GPIO_PIN_1      //!< PC0
--  #define BSP_LED_2               GPIO_PIN_2      //!< PC1
--  #define BSP_LED_3               GPIO_PIN_3      //!< PC2
--  #define BSP_LED_4               GPIO_PIN_4      //!< PC3
--  #define BSP_LED_ALL             (BSP_LED_1 | BSP_LED_2 | BSP_LED_3 | BSP_LED_4)     //!< Bitmask of all LEDs
--#else
-+  #define BSP_LED_1               GPIO_PIN_1
-+  #define BSP_LED_2               GPIO_PIN_2
-+  #define BSP_LED_3               GPIO_PIN_3
-+  #define BSP_LED_4               GPIO_PIN_4
-+  #define BSP_LED_ALL             (BSP_LED_1 | BSP_LED_2 | BSP_LED_3 | BSP_LED_4)
-+#else //Not a MODKAMRU board
-   #define BSP_LED_BASE            GPIO_C_BASE
-   #define BSP_LED_1               GPIO_PIN_0      //!< PC0
-   #define BSP_LED_2               GPIO_PIN_1      //!< PC1
-diff --git a/Components/hal/include/hal_led.h b/Components/hal/include/hal_led.h
-index bb327f1..f8a88b2 100644
---- a/Components/hal/include/hal_led.h
-+++ b/Components/hal/include/hal_led.h
-@@ -86,6 +86,19 @@ extern "C"
- /*********************************************************************
-  * GLOBAL VARIABLES
-  */
-+  
-+#ifdef MODKAMRU_V3 //LED control helpers
-+  /* Dynamically enable/disable LEDs */
-+  extern bool gbModkamUseLeds;
-+  extern void modkamUseLeds(bool);
-+  
-+  /* LED control macros */
-+#define MODKAM_LED_ON(leds) {if(gbModkamUseLeds)HalLedSet(leds,HAL_LED_MODE_ON);}
-+#define MODKAM_LED_OFF(leds) {if(gbModkamUseLeds)HalLedSet(leds,HAL_LED_MODE_OFF);}
-+#define MODKAM_LED_BLINK(leds,count,duty,duration) {if(gbModkamUseLeds)HalLedBlink(leds,count,duty,duration);}
-+#define MODKAM_LED_BLINK_LONG(leds) MODKAM_LED_BLINK(leds,1,90,1000)
-+#define MODKAM_LED_BLINK_SHORT(leds) MODKAM_LED_BLINK(leds,1,50,100)
-+#endif
- 
- /*
-  * Initialize LED Service.
-diff --git a/Components/hal/target/CC2538ZNP/hal_board_cfg.h b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
-index bde4def..365b365 100644
---- a/Components/hal/target/CC2538ZNP/hal_board_cfg.h
-+++ b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
-@@ -341,13 +341,13 @@ extern void MAC_RfFrontendSetup(void);
- }
- 
- /* ----------- LED's ---------- */
--#ifdef MODKAMRU_V3
-+#ifdef MODKAMRU_V3 //Set LED pins to output mode
-   #define HAL_BOARD_LED_INIT() GPIOPinTypeGPIOOutput(BSP_LED_BASE,BSP_LED_ALL)
- #else
-   #define HAL_BOARD_LED_INIT()
- #endif
- 
--#ifdef MODKAMRU_V3
-+#ifdef MODKAMRU_V3 //Redefine LED contorl macros
-   #define HAL_TURN_OFF_LED1()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, BSP_LED_1)
-   #define HAL_TURN_OFF_LED2()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, BSP_LED_2)
-   #define HAL_TURN_OFF_LED3()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, BSP_LED_3)
-@@ -357,7 +357,7 @@ extern void MAC_RfFrontendSetup(void);
-   #define HAL_TURN_ON_LED2()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, 0)
-   #define HAL_TURN_ON_LED3()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, 0)
-   #define HAL_TURN_ON_LED4()        GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, 0)
--#else /* Not a Modkam.ru V3 board */
-+#else /* Not a MODKAMRU board */
-   #define HAL_TURN_OFF_LED1()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, 0)
-   #define HAL_TURN_OFF_LED2()       GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, 0)
-   #define HAL_TURN_OFF_LED3()       //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, 0)
-@@ -377,12 +377,12 @@ extern void MAC_RfFrontendSetup(void);
- #define HAL_SET_GPIO_02()         GPIOPinWrite(BSP_LED_BASE, GPIO_PIN_3, GPIO_PIN_3)  // LED4
- 
- /* ----------- Toggle the LEDs ---------- */
--#ifdef MODKAMRU_V3
-+#ifdef MODKAMRU_V3 //Redefine LED contorl macros
-   #define HAL_TOGGLE_LED1()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_1)))
-   #define HAL_TOGGLE_LED2()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_2)))
-   #define HAL_TOGGLE_LED3()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_3)))
-   #define HAL_TOGGLE_LED4()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_4, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_4)))
--#else
-+#else //Not a MODKAMRU board
-   #define HAL_TOGGLE_LED1()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_1, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_1)))
-   #define HAL_TOGGLE_LED2()         GPIOPinWrite(BSP_LED_BASE, BSP_LED_2, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_2)))
-   #define HAL_TOGGLE_LED3()         //GPIOPinWrite(BSP_LED_BASE, BSP_LED_3, ~(GPIOPinRead(BSP_LED_BASE, BSP_LED_3)))
-@@ -390,12 +390,12 @@ extern void MAC_RfFrontendSetup(void);
- #endif
- 
- /* ----------- Read the LEDs ---------- */
--#ifdef MODKAMRU_V3
-+#ifdef MODKAMRU_V3 //Redefine LED state reading macros
-   #define HAL_STATE_LED1()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_1))
-   #define HAL_STATE_LED2()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_2))
-   #define HAL_STATE_LED3()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_3))
-   #define HAL_STATE_LED4()          (!GPIOPinRead(BSP_LED_BASE, BSP_LED_4))
--#else
-+#else //Not a MODKAMRU board
-   #define HAL_STATE_LED1()          GPIOPinRead(BSP_LED_BASE, BSP_LED_1)
-   #define HAL_STATE_LED2()          GPIOPinRead(BSP_LED_BASE, BSP_LED_2)
-   #define HAL_STATE_LED3()          GPIOPinRead(BSP_LED_BASE, BSP_LED_3)
-diff --git a/Components/hal/target/CC2538ZNP/hal_led.c b/Components/hal/target/CC2538ZNP/hal_led.c
-index 1a6e636..cf560e9 100644
---- a/Components/hal/target/CC2538ZNP/hal_led.c
-+++ b/Components/hal/target/CC2538ZNP/hal_led.c
-@@ -103,6 +103,18 @@ void HalLedOnOff (uint8 leds, uint8 mode);
-  *                                            FUNCTIONS - API
-  ***************************************************************************************************/
- 
-+#ifdef MODKAMRU_V3 // LED control helpers
-+  // Dynamically enable/disable LEDs
-+bool gbModkamUseLeds = true;
-+void modkamUseLeds(bool enable){
-+  gbModkamUseLeds=enable;
-+  if(!enable)
-+    HalLedSet(HAL_LED_ALL,HAL_LED_MODE_OFF);
-+  else
-+    HalLedSet(HAL_LED_1,HAL_LED_MODE_ON);// Light on power LED
-+}
-+#endif
-+
- /***************************************************************************************************
-  * @fn      HalLedInit
-  *
-diff --git a/Components/mt/MT_UTIL.c b/Components/mt/MT_UTIL.c
-index b4a24d8..68d7ceb 100644
---- a/Components/mt/MT_UTIL.c
-+++ b/Components/mt/MT_UTIL.c
-@@ -921,6 +921,12 @@ static void MT_UtilLedControl(uint8 *pBuf)
-   /* LED and Mode */
-   iLed = *pBuf++;
-   iMode = *pBuf;
-+  
-+#ifdef MODKAMRU_V3
-+  if(iMode==0)
-+    modkamUseLeds(false);
-+  else modkamUseLeds(true);
-+#endif
- 
-   if ( iLed == 1 )
-     Led = HAL_LED_1;
-diff --git a/Components/mt/revision_info.h b/Components/mt/revision_info.h
-index 72f311a..6b216cf 100644
---- a/Components/mt/revision_info.h
-+++ b/Components/mt/revision_info.h
-@@ -1 +1 @@
--#define CODE_REVISION_NUMBER 20191217
-\ No newline at end of file
-+#define CODE_REVISION_NUMBER 20200124
-\ No newline at end of file
-diff --git a/Components/stack/zdo/ZDObject.c b/Components/stack/zdo/ZDObject.c
-index dcb6efa..29c8adc 100644
---- a/Components/stack/zdo/ZDObject.c
-+++ b/Components/stack/zdo/ZDObject.c
-@@ -76,6 +76,10 @@
- /* HAL */
- #include "hal_lcd.h"
- 
-+#ifdef MODKAMRU_V3
-+#include "hal_led.h"
-+#endif
-+
- /*********************************************************************
-  * MACROS
-  */
-@@ -1957,6 +1961,12 @@ void ZDO_ProcessMgmtPermitJoinReq( zdoIncomingMsg_t *inMsg )
- #endif
-   
-   duration = inMsg->asdu[ZDP_MGMT_PERMIT_JOIN_REQ_DURATION];
-+  
-+#ifdef MODKAMRU_V3
-+  if(duration==0)
-+    MODKAM_LED_OFF(HAL_LED_3)
-+  else MODKAM_LED_BLINK(HAL_LED_3,duration/2,50,2000)
-+#endif
-   // Per R21 Spec this field is not longer relevant 2.4.3.3.7.2 (Mgmt_Permit_Joining_req Effect on Receipt)
-   //tcsig    = inMsg->asdu[ZDP_MGMT_PERMIT_JOIN_REQ_TC_SIG];
- 
-diff --git a/Projects/zstack/ZMain/TI2538ZNP/ZMain.c b/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
-index 812bb75..0d3a44f 100644
---- a/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
-+++ b/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
-@@ -166,10 +166,10 @@ int main( void )
- #endif
-   
- #ifdef MODKAMRU_V3
--  /* Led test */
--  HalLedBlink(HAL_LED_ALL,1,90,1000);
--  /* Power led on */
--  HalLedSet(HAL_LED_1,HAL_LED_MODE_ON);
-+  // Test all LEDs
-+  MODKAM_LED_BLINK_LONG(HAL_LED_ALL);
-+  // Power LED on
-+  MODKAM_LED_ON(HAL_LED_1);
- #endif
- 
-   osal_start_system(); /* No Return from here */
-diff --git a/Projects/zstack/ZNP/Source/znp_app.c b/Projects/zstack/ZNP/Source/znp_app.c
-index 16182f2..668cfb3 100644
---- a/Projects/zstack/ZNP/Source/znp_app.c
-+++ b/Projects/zstack/ZNP/Source/znp_app.c
-@@ -161,7 +161,7 @@ void znpInit(uint8 taskId)
- uint16 znpEventLoop(uint8 taskId, uint16 events)
- {
- #ifdef MODKAMRU_V3
--  HalLedBlink(HAL_LED_4,1,50,100);
-+  MODKAM_LED_BLINK_SHORT(HAL_LED_4);
- #endif
-   
-   osal_event_hdr_t *pMsg;
--- 
-2.24.1.windows.2
-
-
-From 8108f6c1f53d24b39cbbd0c2a2cd418bcd690b91 Mon Sep 17 00:00:00 2001
-From: Alex Gavr <reverieline@gmail.com>
-Date: Fri, 24 Jan 2020 17:35:24 +0200
-Subject: [PATCH 5/7] Data buffers increased
-
-
 diff --git a/Components/stack/bdb/bdb_FindingAndBinding.c b/Components/stack/bdb/bdb_FindingAndBinding.c
 index 1b4f72c..7695d9f 100644
 --- a/Components/stack/bdb/bdb_FindingAndBinding.c
@@ -681,10 +417,72 @@ index eb436ae..8b43ae5 100644
  
  // 1-255 (0 -> 256) X RTG_TIMER_INTERVAL
  // A known shortcoming is that when a message is enqueued as "hold" for a
+diff --git a/Components/stack/sys/ZGlobals.c b/Components/stack/sys/ZGlobals.c
+index d170283..e251f15 100644
+--- a/Components/stack/sys/ZGlobals.c
++++ b/Components/stack/sys/ZGlobals.c
+@@ -212,7 +212,10 @@ uint8 zgEndDeviceConfiguration = END_DEV_CONFIGURATION;
+ //
+ // NOTICE:  Before enabling Child Aging make sure to review all the related
+ // definitions in this file, especially zgNwkParentInformation.
+-uint8 zgChildAgingEnable = TRUE;
++/**
++ * Disable child aging, otherwise Xiaomi devices are being kicked off the network.
++ */
++uint8 zgChildAgingEnable = FALSE;
+ 
+ //==========    TouchLink NWK configuration    ===============
+ // Values used by Router when starts a network as initiator
+diff --git a/Components/stack/zdo/ZDObject.c b/Components/stack/zdo/ZDObject.c
+index dcb6efa..4bbb646 100644
+--- a/Components/stack/zdo/ZDObject.c
++++ b/Components/stack/zdo/ZDObject.c
+@@ -76,6 +76,10 @@
+ /* HAL */
+ #include "hal_lcd.h"
+ 
++#ifdef MODKAMRU_V3
++#include "hal_led.h"
++#endif
++
+ /*********************************************************************
+  * MACROS
+  */
+@@ -1957,6 +1961,12 @@ void ZDO_ProcessMgmtPermitJoinReq( zdoIncomingMsg_t *inMsg )
+ #endif
+   
+   duration = inMsg->asdu[ZDP_MGMT_PERMIT_JOIN_REQ_DURATION];
++
++#ifdef MODKAMRU_V3
++  if(duration==0)
++    MODKAM_LED_OFF(HAL_LED_3)
++  else MODKAM_LED_BLINK(HAL_LED_3,duration/2,50,2000)
++#endif
+   // Per R21 Spec this field is not longer relevant 2.4.3.3.7.2 (Mgmt_Permit_Joining_req Effect on Receipt)
+   //tcsig    = inMsg->asdu[ZDP_MGMT_PERMIT_JOIN_REQ_TC_SIG];
+ 
 diff --git a/Projects/zstack/Tools/CC2538DB/CC2538.icf b/Projects/zstack/Tools/CC2538DB/CC2538.icf
-index 9d095fa..cb8abf6 100644
+index d4c95cc..cb8abf6 100644
 --- a/Projects/zstack/Tools/CC2538DB/CC2538.icf
 +++ b/Projects/zstack/Tools/CC2538DB/CC2538.icf
+@@ -15,7 +15,7 @@ define memory mem with size = 4G;
+ //
+ // Define a region for the on-chip program code space.
+ //
+-define region FLASH = mem:[from 0x00200000 to 0x0027C7FF];
++define region FLASH = mem:[from 0x00200000 to 0x002797FF];
+ 
+ //
+ // Define a region for the OTA CRC structure.
+@@ -39,7 +39,7 @@ define region FLASH = mem:[from 0x00200000 to 0x0027C7FF];
+ //   The size of this region MUST MATCH the size defined by "HAL_NV_PAGE_CNT"
+ //   in the file: hal_board_cfg.h
+ //
+-define region NV_MEM = mem:[from 0x0027C800 to 0x0027F7FF];
++define region NV_MEM = mem:[from 0x00279800 to 0x0027F7FF];
+ 
+ //
+ // Define regions for on-chip factory Commissioning Parameters.
 @@ -87,7 +87,7 @@ define region FLASH_LCK = mem:[from 0x0027FFE0 to 0x0027FFFF];
  //
  // Define a region for the on-chip SRAM.
@@ -694,16 +492,6 @@ index 9d095fa..cb8abf6 100644
  
  //
  // Define a block for the heap.  The size should be set to something other
--- 
-2.24.1.windows.2
-
-
-From edf3ceeeebb3bdd96e791395a34c76e10994fb2d Mon Sep 17 00:00:00 2001
-From: Alex Gavr <reverieline@gmail.com>
-Date: Tue, 28 Jan 2020 11:14:20 +0200
-Subject: [PATCH 6/7] Increase UART buffers and timeouts for better stability.
-
-
 diff --git a/Projects/zstack/ZMain/TI2538ZNP/OnBoard.h b/Projects/zstack/ZMain/TI2538ZNP/OnBoard.h
 index 02bce67..3271563 100644
 --- a/Projects/zstack/ZMain/TI2538ZNP/OnBoard.h
@@ -730,67 +518,82 @@ index 02bce67..3271563 100644
  
  /* Restart system from absolute beginning
   * Disables interrupts, forces WatchDog reset
--- 
-2.24.1.windows.2
-
-
-From 32372145a154ce9189397d10da44e221fd439452 Mon Sep 17 00:00:00 2001
-From: Alex Gavr <reverieline@gmail.com>
-Date: Tue, 28 Jan 2020 12:26:11 +0200
-Subject: [PATCH 7/7] UART support added
-
-
-diff --git a/Components/hal/target/CC2538ZNP/hal_uart_isr.c b/Components/hal/target/CC2538ZNP/hal_uart_isr.c
-index a6ce62b..0e34aec 100644
---- a/Components/hal/target/CC2538ZNP/hal_uart_isr.c
-+++ b/Components/hal/target/CC2538ZNP/hal_uart_isr.c
-@@ -160,10 +160,17 @@ uint8 HalUARTOpenIsr(uint8 port, halUARTCfg_t *config)
-   
-   if(config->flowControl)
-   {
-+#ifdef MODKAMRU_V3
-+    IOCPinConfigPeriphOutput(GPIO_D_BASE, GPIO_PIN_1, IOC_MUX_OUT_SEL_UART1_RTS);
-+    GPIOPinTypeUARTOutput(GPIO_D_BASE, GPIO_PIN_1);
-+    IOCPinConfigPeriphInput(GPIO_B_BASE, GPIO_PIN_0, IOC_UARTCTS_UART1);
-+    GPIOPinTypeUARTInput(GPIO_B_BASE, GPIO_PIN_0);
-+#else
-     IOCPinConfigPeriphOutput(GPIO_D_BASE, GPIO_PIN_3, IOC_MUX_OUT_SEL_UART1_RTS);
-     GPIOPinTypeUARTOutput(GPIO_D_BASE, GPIO_PIN_3);
-     IOCPinConfigPeriphInput(GPIO_B_BASE, GPIO_PIN_0, IOC_UARTCTS_UART1);
-     GPIOPinTypeUARTInput(GPIO_B_BASE, GPIO_PIN_0);
-+#endif
-   }
-   
-   IntEnable(HAL_UART_INT_CTRL);
-@@ -364,11 +371,14 @@ uint16 HalUARTWriteIsr(uint8 port, uint8 *pBuffer, uint16 length)
-     cnt = idx - cnt;
-   }
+diff --git a/Projects/zstack/ZMain/TI2538ZNP/ZMain.c b/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
+index 5febd92..b2d54d3 100644
+--- a/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
++++ b/Projects/zstack/ZMain/TI2538ZNP/ZMain.c
+@@ -48,6 +48,10 @@
+ #include "OnBoard.h"
+ #include "ZMAC.h"
  
 +#ifdef MODKAMRU_V3
-+#else
-   /* Accept "all-or-none" on write request. */
-   if (cnt < length)
-   {
-     return 0;
-   }
++  #include "hal_led.h"
 +#endif
++
+ #ifndef NONWK
+   #include "AF.h"
+ #endif
+@@ -161,6 +165,13 @@ int main( void )
+   WatchDogEnable( WDTIMX );
+ #endif
  
-   txMT = false;
-   idx = uartRecord.tx.bufferTail;
-diff --git a/Components/mt/revision_info.h b/Components/mt/revision_info.h
-index 6b216cf..636ccc8 100644
---- a/Components/mt/revision_info.h
-+++ b/Components/mt/revision_info.h
-@@ -1 +1 @@
--#define CODE_REVISION_NUMBER 20200124
-\ No newline at end of file
-+#define CODE_REVISION_NUMBER 20200128
++#ifdef MODKAMRU_V3
++  // Test all LEDs
++  MODKAM_LED_BLINK_LONG(HAL_LED_ALL);
++  // Power LED on
++  MODKAM_LED_ON(HAL_LED_1);
++#endif
++
+   osal_start_system(); /* No Return from here */
+ 
+   return 0;  /* Shouldn't get here. */
+diff --git a/Projects/zstack/ZNP/Source/znp.cfg b/Projects/zstack/ZNP/Source/znp.cfg
+index 2b8d56d..3de9bd9 100644
+--- a/Projects/zstack/ZNP/Source/znp.cfg
++++ b/Projects/zstack/ZNP/Source/znp.cfg
+@@ -107,3 +107,14 @@
+ -DMT_APP_FUNC
+ -DMT_APP_CNF_FUNC
+ 
++//Additional flags
++-DINCLUDE_REVISION_INFORMATION
++-DMT_SYS_KEY_MANAGEMENT=1
++-DTP2_LEGACY_ZC
++-DHAL_PA_LNA
++-DHAL_PA_LNA_CC2592
++
++-DHAL_LED=TRUE
++-DBLINK_LEDS
++
++-DMODKAMRU_V3
 \ No newline at end of file
 diff --git a/Projects/zstack/ZNP/Source/znp_app.c b/Projects/zstack/ZNP/Source/znp_app.c
-index 668cfb3..fc188d4 100644
+index 31b115e..9575690 100644
 --- a/Projects/zstack/ZNP/Source/znp_app.c
 +++ b/Projects/zstack/ZNP/Source/znp_app.c
-@@ -516,6 +516,18 @@ static void npBasicRsp(void)
+@@ -67,6 +67,10 @@
+   #include "zcl.h"
+ #endif
+ 
++#ifdef MODKAMRU_V3
++  #include "hal_led.h"
++#endif
++
+ /* ------------------------------------------------------------------------------------------------
+  *                                           Local Functions
+  * ------------------------------------------------------------------------------------------------
+@@ -156,6 +160,10 @@ void znpInit(uint8 taskId)
+  */
+ uint16 znpEventLoop(uint8 taskId, uint16 events)
+ {
++#ifdef MODKAMRU_V3
++  MODKAM_LED_BLINK_SHORT(HAL_LED_4);
++#endif
++
+   osal_event_hdr_t *pMsg;
+ #if !defined CC2531ZNP
+   uint8 *pBuf;
+@@ -508,6 +516,18 @@ static void npBasicRsp(void)
   */
  static void npUartCback(uint8 port, uint8 event)
  {
@@ -799,7 +602,7 @@ index 668cfb3..fc188d4 100644
 +  if(
 +     (event & HAL_UART_RX_FULL) ||
 +     (event & HAL_UART_RX_ABOUT_FULL) ||
-+     (event & HAL_UART_RX_TIMEOUT) 
++     (event & HAL_UART_RX_TIMEOUT)
 +     ){
 +    MT_UartProcessZToolData(port, znpTaskId);
 +  }else if(event & HAL_UART_TX_EMPTY){
@@ -809,7 +612,7 @@ index 668cfb3..fc188d4 100644
    switch (event) {
    case HAL_UART_RX_FULL:
    case HAL_UART_RX_ABOUT_FULL:
-@@ -530,6 +542,7 @@ static void npUartCback(uint8 port, uint8 event)
+@@ -522,6 +542,7 @@ static void npUartCback(uint8 port, uint8 event)
    default:
      break;
    }
@@ -817,6 +620,25 @@ index 668cfb3..fc188d4 100644
  }
  
  /**************************************************************************************************
+diff --git a/note.txt b/note.txt
+new file mode 100644
+index 0000000..c6c23c4
+--- /dev/null
++++ b/note.txt
+@@ -0,0 +1,13 @@
++Preprocessor:
++  USB:
++	- HAL_UART_USB
++	- xHAL_UART=TRUE
++	- xZNP_ALT
++  UART FC:
++	- xHAL_UART_USB
++	- HAL_UART=TRUE
++	- xZNP_ALT
++  UART no FC:
++	- xHAL_UART_USB
++	- HAL_UART=TRUE
++	- ZNP_ALT
 -- 
 2.24.1.windows.2
 

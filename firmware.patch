@@ -1,5 +1,5 @@
 diff --git a/Components/hal/target/CC2538ZNP/hal_board_cfg.h b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
-index 0bc45b5..a6ae08a 100644
+index 0bc45b5..890c5fe 100644
 --- a/Components/hal/target/CC2538ZNP/hal_board_cfg.h
 +++ b/Components/hal/target/CC2538ZNP/hal_board_cfg.h
 @@ -231,7 +231,7 @@ extern unsigned char znpCfg0;
@@ -11,8 +11,26 @@ index 0bc45b5..a6ae08a 100644
  #define HAL_NV_PAGE_BEG           (HAL_NV_PAGE_END-HAL_NV_PAGE_CNT+1)
  #define HAL_NV_START_ADDR         ((FLASH_BASE) + (HAL_NV_PAGE_BEG * HAL_FLASH_PAGE_SIZE))
  
+@@ -280,7 +280,7 @@ extern unsigned char znpCfg0;
+  */
+ 
+ /* ----------- RF-frontend Connection Initialization ---------- */
+-#if defined HAL_PA_LNA || defined HAL_PA_LNA_CC2590
++#if defined HAL_PA_LNA || defined HAL_PA_LNA_CC2590 || defined HAL_PA_LNA_CC2592
+ extern void MAC_RfFrontendSetup(void);
+ #define HAL_BOARD_RF_FRONTEND_SETUP() MAC_RfFrontendSetup()
+ #else
+@@ -306,7 +306,7 @@ extern void MAC_RfFrontendSetup(void);
+ }
+ 
+ 
+-#ifdef HAL_PA_LNA
++#if defined HAL_PA_LNA || defined HAL_PA_LNA_CC2592
+ #define HAL_BOARD_PA_LNA_INIT()  st(GPIOPinTypeGPIOOutput(HGM_BASE, HGM_PIN); )
+ #else
+ #define HAL_BOARD_PA_LNA_INIT()
 diff --git a/Components/mt/MT_SYS.c b/Components/mt/MT_SYS.c
-index aa57766..9b3cb3d 100644
+index aa57766..8cc3939 100644
 --- a/Components/mt/MT_SYS.c
 +++ b/Components/mt/MT_SYS.c
 @@ -73,7 +73,7 @@
@@ -24,20 +42,21 @@ index aa57766..9b3cb3d 100644
  #endif
  
  /******************************************************************************
-@@ -515,7 +515,7 @@ static void MT_SysVersion(void)
- #endif
+@@ -516,7 +516,7 @@ static void MT_SysVersion(void)
  
    osal_memcpy(verStr, (uint8 *)MTVersionString, sizeof(MTVersionString));
--
-+/*
- #if (defined MAKE_CRC_SHDW) || (defined FAKE_CRC_SHDW)  //built for bootloader
+ 
+-#if (defined MAKE_CRC_SHDW) || (defined FAKE_CRC_SHDW)  //built for bootloader
++/*#if (defined MAKE_CRC_SHDW) || (defined FAKE_CRC_SHDW)  //built for bootloader
    HalFlashRead(SBL_SIG_ADDR / HAL_FLASH_PAGE_SIZE,
                 SBL_SIG_ADDR % HAL_FLASH_PAGE_SIZE,
-@@ -537,6 +537,8 @@ static void MT_SysVersion(void)
+                (uint8 *)&sblSig, sizeof(sblSig));
+@@ -536,7 +536,8 @@ static void MT_SysVersion(void)
+ #else
    // SBL is NOT supported
    sblRev = 0xFFFFFFFF;
- #endif
-+*/
+-#endif
++#endif*/
 +  sblRev = 0xFFFFFFFF;
  
    // Plug the SBL revision indication
@@ -57,11 +76,11 @@ index f374554..f2e3de9 100644
                                     2,  /* Software maintenance release number */
 diff --git a/Components/mt/revision_info.h b/Components/mt/revision_info.h
 new file mode 100644
-index 0000000..34cd616
+index 0000000..424fc66
 --- /dev/null
 +++ b/Components/mt/revision_info.h
 @@ -0,0 +1 @@
-+#define CODE_REVISION_NUMBER 20191217
++#define CODE_REVISION_NUMBER 20200211
 \ No newline at end of file
 diff --git a/Components/osal/mcu/cc2538/osal_nv.c b/Components/osal/mcu/cc2538/osal_nv.c
 index 9275e64..7e2fee5 100644
@@ -77,15 +96,17 @@ index 9275e64..7e2fee5 100644
  
  #define OSAL_NV_PAGES_USED     (HAL_NV_PAGE_CNT / OSAL_NV_PHY_PER_PG)
 diff --git a/Components/stack/af/AF.c b/Components/stack/af/AF.c
-index 5e54237..c88b195 100644
+index 5e54237..40f4bfc 100644
 --- a/Components/stack/af/AF.c
 +++ b/Components/stack/af/AF.c
-@@ -405,10 +405,18 @@ void afIncomingData( aps_FrameFormat_t *aff, zAddrType_t *SrcAddress, uint16 Src
+@@ -405,10 +405,19 @@ void afIncomingData( aps_FrameFormat_t *aff, zAddrType_t *SrcAddress, uint16 Src
  #if !defined ( APS_NO_GROUPS )
      // Find the first endpoint for this group
      grpEp = aps_FindGroupForEndpoint( aff->GroupID, APS_GROUPS_FIND_FIRST );
 -    if ( grpEp == APS_GROUPS_EP_NOT_FOUND )
 -      return;   // No endpoint found
+ 
+-    epDesc = afFindEndPointDesc( grpEp );
 +    if ( grpEp == APS_GROUPS_EP_NOT_FOUND ) {
 +      // No endpoint found, default to endpoint 1.
 +      // In the original source code there is a return here.
@@ -97,16 +118,16 @@ index 5e54237..c88b195 100644
 +    else {
 +      epDesc = afFindEndPointDesc( grpEp );
 +    }
- 
--    epDesc = afFindEndPointDesc( grpEp );
++
      if ( epDesc == NULL )
        return;   // Endpoint descriptor not found
  
-@@ -425,6 +433,12 @@ void afIncomingData( aps_FrameFormat_t *aff, zAddrType_t *SrcAddress, uint16 Src
+@@ -425,6 +434,13 @@ void afIncomingData( aps_FrameFormat_t *aff, zAddrType_t *SrcAddress, uint16 Src
        epDesc = pList->epDesc;
      }
    }
-+  else if ( aff->DstEndPoint == 10 || aff->DstEndPoint == 11 ) {
++  else if ( aff->DstEndPoint == 10 || aff->DstEndPoint == 11 )
++  {
 +    if ( (epDesc = afFindEndPointDesc( 1 )) )
 +    {
 +      pList = afFindEndPointDescList( epDesc->endPoint );
@@ -131,40 +152,16 @@ index d170283..e251f15 100644
  
  //==========    TouchLink NWK configuration    ===============
  // Values used by Router when starts a network as initiator
-diff --git a/Projects/zstack/Tools/CC2538DB/CC2538.icf b/Projects/zstack/Tools/CC2538DB/CC2538.icf
-index d4c95cc..9d095fa 100644
---- a/Projects/zstack/Tools/CC2538DB/CC2538.icf
-+++ b/Projects/zstack/Tools/CC2538DB/CC2538.icf
-@@ -15,7 +15,7 @@ define memory mem with size = 4G;
- //
- // Define a region for the on-chip program code space.
- //
--define region FLASH = mem:[from 0x00200000 to 0x0027C7FF];
-+define region FLASH = mem:[from 0x00200000 to 0x002797FF];
- 
- //
- // Define a region for the OTA CRC structure.
-@@ -39,7 +39,7 @@ define region FLASH = mem:[from 0x00200000 to 0x0027C7FF];
- //   The size of this region MUST MATCH the size defined by "HAL_NV_PAGE_CNT"
- //   in the file: hal_board_cfg.h
- //
--define region NV_MEM = mem:[from 0x0027C800 to 0x0027F7FF];
-+define region NV_MEM = mem:[from 0x00279800 to 0x0027F7FF];
- 
- //
- // Define regions for on-chip factory Commissioning Parameters.
 diff --git a/Projects/zstack/ZNP/Source/znp.cfg b/Projects/zstack/ZNP/Source/znp.cfg
-index 2b8d56d..7ce9285 100644
+index 2b8d56d..6954a6a 100644
 --- a/Projects/zstack/ZNP/Source/znp.cfg
 +++ b/Projects/zstack/ZNP/Source/znp.cfg
-@@ -107,3 +107,9 @@
+@@ -107,3 +107,8 @@
  -DMT_APP_FUNC
  -DMT_APP_CNF_FUNC
-
-+//Additional flags
+ 
++/* Additional flags */
 +-DINCLUDE_REVISION_INFORMATION
 +-DMT_SYS_KEY_MANAGEMENT=1
 +-DTP2_LEGACY_ZC
-+-DHAL_PA_LNA
 +-DHAL_PA_LNA_CC2592
-\ No newline at end of file

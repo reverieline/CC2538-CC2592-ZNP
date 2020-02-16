@@ -306,7 +306,7 @@ index 0000000..636ccc8
 --- /dev/null
 +++ b/Components/mt/revision_info.h
 @@ -0,0 +1 @@
-+#define CODE_REVISION_NUMBER 20200128
++#define CODE_REVISION_NUMBER 20200211
 \ No newline at end of file
 diff --git a/Components/osal/mcu/cc2538/osal_nv.c b/Components/osal/mcu/cc2538/osal_nv.c
 index 9275e64..7e2fee5 100644
